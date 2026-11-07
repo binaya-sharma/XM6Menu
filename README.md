@@ -38,6 +38,7 @@ accounts, analytics, or network service.
 | Noise control | Noise Cancelling, Ambient levels 1–20, and Off |
 | Headphone button sync | Reflect physical NC/AMB changes while open and resync when reopened |
 | Wear detection | Show whether the XM6 is worn and refresh while the popover is open |
+| Equalizer | Read and select presets, with custom sliders for the XM6-reported band layout |
 | Listening level | Read and change the active macOS output volume |
 | Media controls | Previous, Play/Pause, and Next for the current macOS system media session |
 | Launch at Login | Optional native macOS startup registration in Settings |
@@ -104,8 +105,8 @@ security and privacy checks.
 
 ## Current limits
 
-Equalizer control and multipoint peer management are not available through this
-app. Use Sony | Sound Connect for those features.
+Multipoint peer management is not available through this app. Use Sony | Sound
+Connect for that feature.
 
 ## License
 

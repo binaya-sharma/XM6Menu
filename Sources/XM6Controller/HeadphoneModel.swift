@@ -7,8 +7,10 @@ final class HeadphoneModel: ObservableObject {
     @Published private(set) var outputVolume: Double?
     @Published private(set) var protocolState = XM6ProtocolState()
     @Published private(set) var isChangingNoiseControl = false
+    @Published private(set) var isChangingEqualizer = false
     @Published private(set) var isLoadingProtocol = false
     @Published private(set) var selectedNoiseControl: NoiseControlMode?
+    @Published private(set) var equalizerBands: [Int] = []
     @Published var ambientLevel = 10
     @Published private(set) var isChangingConnection = false
     @Published private(set) var launchAtLoginEnabled = LaunchAtLoginService.isEnabled
@@ -93,6 +95,7 @@ final class HeadphoneModel: ObservableObject {
         if sonyDevice?.isConnected != true {
             protocolState = XM6ProtocolState()
             selectedNoiseControl = nil
+            equalizerBands = []
         }
         guard loadBattery else { return }
         syncProtocol(showLoading: true, useSystemBatteryFallback: true)
@@ -100,7 +103,7 @@ final class HeadphoneModel: ObservableObject {
 
     private func syncProtocol(showLoading: Bool, useSystemBatteryFallback: Bool) {
         guard let device = sonyDevice, device.isConnected else { return }
-        guard !isSyncingProtocol, !isChangingNoiseControl, !isChangingConnection else { return }
+        guard !isSyncingProtocol, !isChangingNoiseControl, !isChangingEqualizer, !isChangingConnection else { return }
         isSyncingProtocol = true
         if showLoading { isLoadingProtocol = true }
         let startingRevision = controlRevision
@@ -125,10 +128,12 @@ final class HeadphoneModel: ObservableObject {
                 reported = battery
             }
             guard sonyDevice?.address == device.address else { return }
-            if let direct, startingRevision == controlRevision, !isChangingNoiseControl {
-                protocolState = direct
-                selectedNoiseControl = direct.noiseControlMode
-                if let level = direct.ambientLevel { ambientLevel = level }
+            if let direct, startingRevision == controlRevision, !isChangingNoiseControl, !isChangingEqualizer {
+                let reconciled = preservingEqualizerLayout(in: direct)
+                protocolState = reconciled
+                selectedNoiseControl = reconciled.noiseControlMode
+                if let level = reconciled.ambientLevel { ambientLevel = level }
+                equalizerBands = reconciled.equalizer?.bands ?? []
                 lastError = nil
             }
             battery = reported
@@ -137,7 +142,7 @@ final class HeadphoneModel: ObservableObject {
     }
 
     func setNoiseControl(_ mode: NoiseControlMode) {
-        guard let device = sonyDevice, device.isConnected, !isChangingNoiseControl, !isLoadingProtocol else { return }
+        guard let device = sonyDevice, device.isConnected, !isChangingNoiseControl, !isChangingEqualizer, !isLoadingProtocol else { return }
         controlRevision += 1
         let previousSelection = selectedNoiseControl ?? protocolState.noiseControlMode
         selectedNoiseControl = mode
@@ -151,9 +156,11 @@ final class HeadphoneModel: ObservableObject {
                     mode: mode,
                     ambientLevel: requestedLevel
                 )
-                protocolState = state
-                selectedNoiseControl = state.noiseControlMode ?? mode
-                if let percent = state.batteryPercent { battery = percent }
+                let reconciled = preservingEqualizerLayout(in: state)
+                protocolState = reconciled
+                selectedNoiseControl = reconciled.noiseControlMode ?? mode
+                equalizerBands = reconciled.equalizer?.bands ?? equalizerBands
+                if let percent = reconciled.batteryPercent { battery = percent }
                 sonyDevice = BluetoothService.sonyHeadphone(battery: battery)
             } catch {
                 selectedNoiseControl = previousSelection
@@ -161,6 +168,92 @@ final class HeadphoneModel: ObservableObject {
             }
             isChangingNoiseControl = false
         }
+    }
+
+    func setEqualizerPreset(_ preset: EqualizerPreset) {
+        guard let current = protocolState.equalizer else { return }
+        let requested = EqualizerState(
+            preset: preset,
+            layout: current.layout,
+            bands: equalizerBands
+        )
+        writeEqualizerPreset(preset, current: requested)
+    }
+
+    func updateEqualizerBand(at index: Int, to value: Int) {
+        guard let layout = protocolState.equalizer?.layout,
+              equalizerBands.indices.contains(index) else {
+            return
+        }
+        equalizerBands[index] = min(layout.range.upperBound, max(layout.range.lowerBound, value))
+    }
+
+    func applyEqualizerBands() {
+        guard let current = protocolState.equalizer,
+              current.layout != nil,
+              current.preset == .custom else {
+            return
+        }
+        let requested = EqualizerState(
+            preset: .custom,
+            layout: current.layout,
+            bands: equalizerBands
+        )
+        writeEqualizerPreset(.custom, current: requested)
+    }
+
+    private func writeEqualizerPreset(_ preset: EqualizerPreset, current: EqualizerState) {
+        guard let device = sonyDevice,
+              device.isConnected,
+              !isChangingEqualizer,
+              !isChangingNoiseControl,
+              !isLoadingProtocol else {
+            return
+        }
+        let previousBands = protocolState.equalizer?.bands ?? []
+        controlRevision += 1
+        isChangingEqualizer = true
+        lastError = nil
+        Task {
+            do {
+                let state = try await protocolCoordinator.setEqualizerPreset(
+                    address: device.address,
+                    preset: preset,
+                    current: current
+                )
+                let reconciled = preservingEqualizerLayout(in: state, fallback: current)
+                protocolState = reconciled
+                selectedNoiseControl = reconciled.noiseControlMode
+                if let level = reconciled.ambientLevel { ambientLevel = level }
+                equalizerBands = reconciled.equalizer?.bands ?? equalizerBands
+                if let percent = reconciled.batteryPercent { battery = percent }
+                sonyDevice = BluetoothService.sonyHeadphone(battery: battery)
+            } catch {
+                equalizerBands = previousBands
+                lastError = error.localizedDescription
+            }
+            isChangingEqualizer = false
+        }
+    }
+
+    private func preservingEqualizerLayout(
+        in state: XM6ProtocolState,
+        fallback: EqualizerState? = nil
+    ) -> XM6ProtocolState {
+        guard let reported = state.equalizer,
+              reported.layout == nil,
+              let remembered = fallback ?? protocolState.equalizer,
+              remembered.layout != nil,
+              !remembered.bands.isEmpty else {
+            return state
+        }
+        var reconciled = state
+        reconciled.equalizer = EqualizerState(
+            preset: reported.preset,
+            layout: remembered.layout,
+            bands: remembered.bands
+        )
+        return reconciled
     }
 
     func toggleConnection() {

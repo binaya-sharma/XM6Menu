@@ -40,6 +40,7 @@ struct XM6ProtocolState: Equatable, Sendable {
     var noiseControlMode: NoiseControlMode?
     var ambientLevel: Int?
     var isWorn: Bool?
+    var equalizer: EqualizerState?
 }
 
 enum XM6ProtocolError: LocalizedError {
@@ -50,6 +51,7 @@ enum XM6ProtocolError: LocalizedError {
     case timedOut
     case invalidFrame
     case unexpectedResponse
+    case equalizerUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -60,12 +62,14 @@ enum XM6ProtocolError: LocalizedError {
         case .timedOut: "The XM6 did not answer the control request."
         case .invalidFrame: "The XM6 returned an invalid control frame."
         case .unexpectedResponse: "The XM6 returned an unexpected control response."
+        case .equalizerUnavailable: "The XM6 did not report usable equalizer settings."
         }
     }
 }
 
 /// Minimal, local-only implementation of the Sony v2 protocol used by WH-1000XM6.
-/// It intentionally supports only battery, noise control, and wear status; no third-party code runs at runtime.
+/// It intentionally supports only battery, noise control, wear status, and equalizer presets;
+/// no third-party code runs at runtime.
 enum XM6ProtocolService {
     static func readState(address: String) throws -> XM6ProtocolState {
         try withRetry(address: address) { session in
@@ -78,6 +82,18 @@ enum XM6ProtocolService {
         try withRetry(address: address) { session in
             try session.initialize()
             try session.setNoiseControl(mode: mode, ambientLevel: ambientLevel)
+            return try session.readState()
+        }
+    }
+
+    static func setEqualizerPreset(
+        address: String,
+        preset: EqualizerPreset,
+        current: EqualizerState
+    ) throws -> XM6ProtocolState {
+        try withRetry(address: address) { session in
+            try session.initialize()
+            try session.setEqualizerPreset(preset, current: current)
             return try session.readState()
         }
     }
@@ -106,7 +122,7 @@ enum XM6ProtocolService {
         switch protocolError {
         case .channelUnavailable, .writeFailed, .timedOut, .invalidFrame, .unexpectedResponse:
             return true
-        case .deviceUnavailable, .serviceUnavailable:
+        case .deviceUnavailable, .serviceUnavailable, .equalizerUnavailable:
             return false
         }
     }
@@ -121,6 +137,46 @@ enum XM6PayloadDecoder {
         }
         return payload.last == 0x00
     }
+
+    static func equalizerState(from payload: [UInt8]) -> EqualizerState? {
+        guard payload.count >= 4,
+              payload[0] == 0x57 || payload[0] == 0x59,
+              payload[1] == 0x00,
+              let preset = EqualizerPreset(rawValue: payload[2]) else {
+            return nil
+        }
+        let count = Int(payload[3])
+        guard payload.count >= 4 + count else { return nil }
+        let layout: EqualizerLayout?
+        switch count {
+        case 6: layout = .clearBassFive
+        case 10: layout = .graphicTen
+        default: layout = nil
+        }
+        guard let layout else {
+            return EqualizerState(preset: preset, layout: nil, bands: [])
+        }
+        let bands = payload[4..<(4 + count)].map { Int($0) - layout.wireOffset }
+        guard bands.allSatisfy(layout.range.contains) else { return nil }
+        return EqualizerState(preset: preset, layout: layout, bands: bands)
+    }
+
+    static func equalizerSetPayload(
+        preset: EqualizerPreset,
+        current: EqualizerState
+    ) -> [UInt8]? {
+        if preset == .custom {
+            guard let layout = current.layout,
+                  current.bands.count == layout.labels.count,
+                  current.bands.allSatisfy(layout.range.contains),
+                  current.bands.count <= Int(UInt8.max) else {
+                return nil
+            }
+            let encoded = current.bands.map { UInt8($0 + layout.wireOffset) }
+            return [0x58, 0x00, preset.rawValue, UInt8(encoded.count)] + encoded
+        }
+        return [0x58, 0x00, preset.rawValue, 0x00]
+    }
 }
 
 /// Serializes access to the XM6's single RFCOMM control service. Concurrent refresh and
@@ -132,6 +188,14 @@ actor XM6ProtocolCoordinator {
 
     func setNoiseControl(address: String, mode: NoiseControlMode, ambientLevel: Int) throws -> XM6ProtocolState {
         try XM6ProtocolService.setNoiseControl(address: address, mode: mode, ambientLevel: ambientLevel)
+    }
+
+    func setEqualizerPreset(
+        address: String,
+        preset: EqualizerPreset,
+        current: EqualizerState
+    ) throws -> XM6ProtocolState {
+        try XM6ProtocolService.setEqualizerPreset(address: address, preset: preset, current: current)
     }
 }
 
@@ -270,6 +334,9 @@ private final class XM6RFCOMMSession: NSObject, IOBluetoothRFCOMMChannelDelegate
         if let wear = try? transact([0xf2, 0x10], expecting: 0xf3, subtype: 0x10) {
             state.isWorn = XM6PayloadDecoder.wearState(from: wear)
         }
+        if let equalizer = try? transact([0x56, 0x00], expecting: 0x57, subtype: 0x00) {
+            state.equalizer = XM6PayloadDecoder.equalizerState(from: equalizer)
+        }
         return state
     }
 
@@ -278,6 +345,14 @@ private final class XM6RFCOMMSession: NSObject, IOBluetoothRFCOMMChannelDelegate
         let setting: UInt8 = mode == .ambient ? 1 : 0
         let level = UInt8(max(1, min(20, ambientLevel)))
         try sendAndWaitForAck([0x68, 0x17, 0x01, on, setting, 0x00, level])
+    }
+
+    func setEqualizerPreset(_ preset: EqualizerPreset, current: EqualizerState) throws {
+        guard let payload = XM6PayloadDecoder.equalizerSetPayload(preset: preset, current: current) else {
+            throw XM6ProtocolError.equalizerUnavailable
+        }
+        try sendAndWaitForAck(payload)
+        pumpRunLoop(for: 0.1)
     }
 
     func close() {
