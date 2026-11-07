@@ -120,13 +120,26 @@ private struct ControllerPopover: View {
             }
 
             HStack {
-                Label("Wear Detection", systemImage: model.wearStatusIcon)
+                Label("Wear Detection", systemImage: "ear")
                 Spacer()
-                Text(model.isLoadingProtocol ? "Reading…" : model.wearStatusText)
-                    .foregroundStyle(.secondary)
+                Button {
+                    model.refresh()
+                } label: {
+                    if model.isLoadingProtocol {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label(model.wearStatusText, systemImage: model.wearStatusIcon)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(model.protocolState.isWorn == true ? .green : .gray)
+                .disabled(model.isLoadingProtocol || model.isChangingNoiseControl)
+                .help("Refresh wear status")
+                .accessibilityLabel("Wear status: \(model.wearStatusText). Refresh")
             }
             .font(.caption)
-            .accessibilityElement(children: .combine)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
