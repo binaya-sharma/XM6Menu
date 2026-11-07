@@ -77,7 +77,7 @@ private struct ControllerPopover: View {
             .buttonStyle(.plain)
             .help("Refresh devices")
             .accessibilityLabel("Refresh")
-            .disabled(model.isLoadingProtocol || model.isChangingNoiseControl)
+            .disabled(model.isLoadingProtocol || model.isChangingNoiseControl || model.isChangingEqualizer)
         }
         .padding(16)
     }
@@ -111,7 +111,7 @@ private struct ControllerPopover: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(model.isChangingConnection)
+                .disabled(model.isChangingConnection || model.isChangingNoiseControl || model.isChangingEqualizer)
             }
 
             HStack(spacing: 10) {
@@ -135,7 +135,7 @@ private struct ControllerPopover: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .tint(model.protocolState.isWorn == true ? .green : .gray)
-                .disabled(model.isLoadingProtocol || model.isChangingNoiseControl)
+                .disabled(model.isLoadingProtocol || model.isChangingNoiseControl || model.isChangingEqualizer)
                 .help("Refresh wear status")
                 .accessibilityLabel("Wear status: \(model.wearStatusText). Refresh")
             }
@@ -158,6 +158,7 @@ private struct ControllerPopover: View {
                     selection: model.displayedNoiseControl,
                     isEnabled: model.noiseControlAvailable
                         && !model.isChangingNoiseControl
+                        && !model.isChangingEqualizer
                         && !model.isLoadingProtocol,
                     action: model.setNoiseControl
                 )
@@ -184,6 +185,78 @@ private struct ControllerPopover: View {
             .padding(10)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
 
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("Equalizer", systemImage: "slider.horizontal.3")
+                    Spacer()
+                    if model.isChangingEqualizer {
+                        ProgressView().controlSize(.small)
+                    } else if let equalizer = model.protocolState.equalizer {
+                        Picker("Equalizer preset", selection: Binding(
+                            get: { equalizer.preset },
+                            set: model.setEqualizerPreset
+                        )) {
+                            ForEach(EqualizerPreset.allCases.filter {
+                                $0 != .custom || equalizer.layout != nil
+                            }) { preset in
+                                Text(preset.label).tag(preset)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .disabled(model.isLoadingProtocol || model.isChangingNoiseControl)
+                    } else {
+                        Text("Not reported").foregroundStyle(.secondary)
+                    }
+                }
+                Text(equalizerIsCustom
+                     ? "Adjust individual frequencies below."
+                     : "Choose Custom Bands to adjust frequencies.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if equalizerIsCustom,
+                   let layout = model.protocolState.equalizer?.layout,
+                   model.equalizerBands.count == layout.labels.count {
+                    DisclosureGroup("Custom Bands · \(layout.title)") {
+                        LazyVGrid(
+                            columns: [GridItem(.flexible()), GridItem(.flexible())],
+                            spacing: 10
+                        ) {
+                            ForEach(Array(layout.labels.enumerated()), id: \.offset) { index, label in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(label).lineLimit(1)
+                                        Spacer()
+                                        Text("\(model.equalizerBands[index]) dB")
+                                            .monospacedDigit()
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(model.equalizerBands[index]) },
+                                            set: { model.updateEqualizerBand(at: index, to: Int($0.rounded())) }
+                                        ),
+                                        in: Double(layout.range.lowerBound)...Double(layout.range.upperBound),
+                                        step: 1,
+                                        onEditingChanged: { editing in
+                                            if !editing { model.applyEqualizerBands() }
+                                        }
+                                    )
+                                    .disabled(model.isChangingEqualizer)
+                                }
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(.caption2)
+                }
+            }
+            .font(.caption)
+            .padding(10)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+
             if let error = model.lastError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -192,6 +265,10 @@ private struct ControllerPopover: View {
             }
         }
         .padding(16)
+    }
+
+    private var equalizerIsCustom: Bool {
+        model.protocolState.equalizer?.preset == .custom
     }
 
     private var listeningLevel: some View {
@@ -397,7 +474,7 @@ private struct SettingsView: View {
             }
             Section("Sony controls") {
                 CapabilityRow(name: "Noise cancelling / ambient sound", state: model.noiseControlAvailable ? "Experimental" : "Unavailable", detail: "Uses a local reverse-engineered XM6 Bluetooth protocol; no Sony-supported macOS API exists.")
-                CapabilityRow(name: "Equalizer", state: "Unavailable", detail: "Use Sony | Sound Connect; no supported macOS API is available.")
+                CapabilityRow(name: "Equalizer", state: model.protocolState.equalizer?.preset.label ?? "Not reported", detail: "Reads and changes presets and device-reported custom bands over the local XM6 control channel.")
                 CapabilityRow(name: "Multipoint", state: "Status only", detail: "macOS can report this Mac’s connection, not manage the headphone’s peer list.")
                 CapabilityRow(name: "Wear detection", state: model.protocolState.isWorn == nil ? "Not reported" : model.wearStatusText, detail: "Reads the XM6 wearing sensor over the local control channel while the popover is open.")
             }
