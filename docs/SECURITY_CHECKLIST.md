@@ -24,7 +24,7 @@ Review these areas before publishing an XM6 Controller release.
 ## Build and distribution
 
 - Tests and the framework-free verification checks pass.
-- Real XM6 ANC, AMB, OFF, battery, connection, and media controls are tested.
+- Real XM6 ANC, AMB, OFF, battery, wear status, connection, and media controls are tested.
 - The release app is built from a clean staging directory.
 - `codesign --verify --deep --strict` succeeds.
 - Public builds use Developer ID, hardened runtime, and notarization.

@@ -49,6 +49,20 @@ final class HeadphoneModel: ObservableObject {
     var displayedNoiseControl: NoiseControlMode? {
         selectedNoiseControl ?? protocolState.noiseControlMode
     }
+    var wearStatusText: String {
+        switch protocolState.isWorn {
+        case true: "Worn"
+        case false: "Not worn"
+        case nil: "Not reported"
+        }
+    }
+    var wearStatusIcon: String {
+        switch protocolState.isWorn {
+        case true: "ear.fill"
+        case false: "ear"
+        case nil: "ear"
+        }
+    }
     var isSonyOutput: Bool {
         guard let name = sonyDevice?.name.lowercased() else { return false }
         return audioOutputs.contains { $0.isDefault && ($0.name.lowercased().contains("xm6") || name.contains($0.name.lowercased())) }

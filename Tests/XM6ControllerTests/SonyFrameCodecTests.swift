@@ -37,4 +37,16 @@ final class SonyFrameCodecTests: XCTestCase {
         XCTAssertFalse(BluetoothService.isSupportedXM6(name: "WH-1000XM4"))
         XCTAssertFalse(BluetoothService.isSupportedXM6(name: "XM6 Controller"))
     }
+
+    func testDecodesWearStatusRepliesAndNotifications() {
+        XCTAssertEqual(XM6PayloadDecoder.wearState(from: [0xf3, 0x10, 0x00]), true)
+        XCTAssertEqual(XM6PayloadDecoder.wearState(from: [0xf5, 0x10, 0x01, 0x01]), false)
+        XCTAssertEqual(XM6PayloadDecoder.wearState(from: [0xf5, 0x10, 0x01, 0x00]), true)
+    }
+
+    func testRejectsUnrelatedWearPayloads() {
+        XCTAssertNil(XM6PayloadDecoder.wearState(from: [0xf3, 0x11, 0x00]))
+        XCTAssertNil(XM6PayloadDecoder.wearState(from: [0xf7, 0x10, 0x00]))
+        XCTAssertNil(XM6PayloadDecoder.wearState(from: [0xf3, 0x10]))
+    }
 }

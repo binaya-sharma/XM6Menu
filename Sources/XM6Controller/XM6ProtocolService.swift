@@ -39,6 +39,7 @@ struct XM6ProtocolState: Equatable, Sendable {
     var isCharging = false
     var noiseControlMode: NoiseControlMode?
     var ambientLevel: Int?
+    var isWorn: Bool?
 }
 
 enum XM6ProtocolError: LocalizedError {
@@ -64,7 +65,7 @@ enum XM6ProtocolError: LocalizedError {
 }
 
 /// Minimal, local-only implementation of the Sony v2 protocol used by WH-1000XM6.
-/// It intentionally supports only battery and noise control; no third-party code runs at runtime.
+/// It intentionally supports only battery, noise control, and wear status; no third-party code runs at runtime.
 enum XM6ProtocolService {
     static func readState(address: String) throws -> XM6ProtocolState {
         try withRetry(address: address) { session in
@@ -108,6 +109,17 @@ enum XM6ProtocolService {
         case .deviceUnavailable, .serviceUnavailable:
             return false
         }
+    }
+}
+
+enum XM6PayloadDecoder {
+    static func wearState(from payload: [UInt8]) -> Bool? {
+        guard payload.count >= 3,
+              payload[0] == 0xf3 || payload[0] == 0xf5,
+              payload[1] == 0x10 else {
+            return nil
+        }
+        return payload.last == 0x00
     }
 }
 
@@ -254,6 +266,9 @@ private final class XM6RFCOMMSession: NSObject, IOBluetoothRFCOMMChannelDelegate
                 state.noiseControlMode = .ambient
                 state.ambientLevel = max(1, min(20, Int(noise[6])))
             }
+        }
+        if let wear = try? transact([0xf2, 0x10], expecting: 0xf3, subtype: 0x10) {
+            state.isWorn = XM6PayloadDecoder.wearState(from: wear)
         }
         return state
     }

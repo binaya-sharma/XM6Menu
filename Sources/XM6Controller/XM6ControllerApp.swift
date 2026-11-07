@@ -119,6 +119,15 @@ private struct ControllerPopover: View {
                 MetricTile(icon: "speaker.wave.2.fill", title: "Output", value: model.isSonyOutput ? "Active" : "Inactive")
             }
 
+            HStack {
+                Label("Wear Detection", systemImage: model.wearStatusIcon)
+                Spacer()
+                Text(model.isLoadingProtocol ? "Reading…" : model.wearStatusText)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .accessibilityElement(children: .combine)
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("Noise Control", systemImage: "waveform.badge.minus")
@@ -365,10 +374,10 @@ private struct SettingsView: View {
                 CapabilityRow(name: "Noise cancelling / ambient sound", state: model.noiseControlAvailable ? "Experimental" : "Unavailable", detail: "Uses a local reverse-engineered XM6 Bluetooth protocol; no Sony-supported macOS API exists.")
                 CapabilityRow(name: "Equalizer", state: "Unavailable", detail: "Use Sony | Sound Connect; no supported macOS API is available.")
                 CapabilityRow(name: "Multipoint", state: "Status only", detail: "macOS can report this Mac’s connection, not manage the headphone’s peer list.")
-                CapabilityRow(name: "Wear detection", state: "Unavailable", detail: "Playback sensor events are not exposed through public macOS APIs.")
+                CapabilityRow(name: "Wear detection", state: model.protocolState.isWorn == nil ? "Not reported" : model.wearStatusText, detail: "Reads the XM6 wearing sensor over the local control channel while the popover is open.")
             }
             Section("Privacy") {
-                Text("This app reads locally paired Bluetooth device metadata and the system audio-device list. It does not send device information off your Mac.")
+                Text("This app reads locally paired Bluetooth device metadata, XM6 wearing status, and the system audio-device list. It does not send device information off your Mac.")
                     .foregroundStyle(.secondary)
             }
         }

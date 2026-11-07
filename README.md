@@ -37,6 +37,7 @@ accounts, analytics, or network service.
 | Battery | Read percentage and charging state from the headphone |
 | Noise control | Noise Cancelling, Ambient levels 1–20, and Off |
 | Headphone button sync | Reflect physical NC/AMB changes while open and resync when reopened |
+| Wear detection | Show whether the XM6 is worn and refresh while the popover is open |
 | Listening level | Read and change the active macOS output volume |
 | Media controls | Previous, Play/Pause, and Next for the active media app |
 | Launch at Login | Optional native macOS startup registration in Settings |
@@ -101,8 +102,8 @@ security and privacy checks.
 
 ## Current limits
 
-Equalizer control, multipoint peer management, and wear-detection events are not
-available through this app. Use Sony | Sound Connect for those features.
+Equalizer control and multipoint peer management are not available through this
+app. Use Sony | Sound Connect for those features.
 
 ## License
 
