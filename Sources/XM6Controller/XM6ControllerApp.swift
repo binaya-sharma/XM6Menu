@@ -260,7 +260,19 @@ private struct ControllerPopover: View {
 
     private var mediaControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Media").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            HStack {
+                Text("Media")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Label("System Media", systemImage: "music.note")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            Text("Controls whichever app currently owns the macOS media session.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 mediaButton(.previous, icon: "backward.fill", label: "Previous")
                 mediaButton(.playPause, icon: "playpause.fill", label: "Play or Pause")

@@ -39,7 +39,7 @@ accounts, analytics, or network service.
 | Headphone button sync | Reflect physical NC/AMB changes while open and resync when reopened |
 | Wear detection | Show whether the XM6 is worn and refresh while the popover is open |
 | Listening level | Read and change the active macOS output volume |
-| Media controls | Previous, Play/Pause, and Next for the active media app |
+| Media controls | Previous, Play/Pause, and Next for the current macOS system media session |
 | Launch at Login | Optional native macOS startup registration in Settings |
 | Sound output | List Core Audio devices and switch the default output |
 | Verification | Read settings back from the XM6 before showing them as synced |
@@ -61,6 +61,8 @@ open "outputs/XM6 Controller.app"
 There is no Dock window. After launch, select the **S** icon on the right side
 of the menu bar. The first media-control click asks for Accessibility permission
 so macOS can receive the requested media key. The app does not monitor input.
+macOS decides which Now Playing app receives the command; public APIs do not
+expose that app's identity to XM6 Controller.
 You can also open `Package.swift` directly in Xcode.
 
 Open **Settings** from the popover to enable **Launch at Login**.
