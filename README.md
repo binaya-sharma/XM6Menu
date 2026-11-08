@@ -14,7 +14,7 @@
       <img src="Resources/XM6ProductRender.png" alt="Illustrative render of black over-ear headphones" width="320">
     </td>
     <td align="center" valign="middle" width="55%">
-      <img src="Resources/XM6ControllerUI-v6.png" alt="XM6 Controller showing a connected WH-1000XM6, battery, ANC, AMB and OFF controls, volume, media controls with an Accessibility permission disclosure, and sound outputs" width="330">
+      <img src="Resources/XM6ControllerUI-v8.png" alt="XM6 Controller showing a connected WH-1000XM6, wear status, battery, noise control, a 10-band custom equalizer, volume, system media controls, and sound outputs" width="330">
     </td>
   </tr>
   <tr>
