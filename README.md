@@ -2,7 +2,7 @@
 
 # XM6 Controller for macOS
 
-**Battery, noise control, output switching, and listening level, right from your menu bar.**
+**Battery, noise control, equalizer, media, and sound output controls, right from your menu bar.**
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple)](https://www.apple.com/macos/)
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org/)
@@ -46,8 +46,35 @@ accounts, analytics, or network service.
 | Verification | Read settings back from the XM6 before showing them as synced |
 
 The Bluetooth controls have been exercised end to end on a real WH-1000XM6,
-including repeated ANC, Ambient, Off, battery, volume, output, and reconnect
-cycles.
+including repeated ANC, Ambient, Off, battery, wear status, equalizer preset,
+custom band, volume, output, and reconnect cycles.
+
+## Equalizer controls
+
+The Equalizer card reads the current setting directly from the headphone and
+offers these presets:
+
+- Off
+- Heavy
+- Clear
+- Hard
+- Soft
+- Custom Bands
+
+Selecting **Custom Bands** reveals the frequency sliders reported by the XM6.
+The app supports both known layouts instead of assuming that every firmware
+uses the same one:
+
+| Layout | Frequencies | Adjustment range |
+| --- | --- | --- |
+| 6 bands | Clear Bass, 400 Hz, 1 kHz, 2.5 kHz, 6.3 kHz, 16 kHz | -10 dB to +10 dB |
+| 10 bands | 31 Hz, 63 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, 16 kHz | -6 dB to +6 dB |
+
+Band values update locally while a slider is moving. The app sends the new
+settings only when the slider is released, which avoids flooding the single
+Bluetooth control channel. It then reads the setting back from the headphone
+before treating the change as synchronized. Equalizer and noise-control writes
+are serialized, so rapid clicks cannot overlap on the same channel.
 
 ## Quick start
 
@@ -74,14 +101,16 @@ Open **Settings** from the popover to enable **Launch at Login**.
 - IOBluetooth handles the classic Bluetooth connection and the XM6 control
   channel.
 - Core Audio supplies the real output-device list and system volume controls.
-- A deliberately small Sony v2 protocol implementation handles only battery
-  and noise control, serializing requests so refreshes and button clicks do not
-  compete for the headphone's single channel.
+- A deliberately small Sony v2 protocol implementation handles battery, wear
+  status, noise control, and equalizer settings. Requests are serialized so
+  refreshes, sliders, and button clicks do not compete for the headphone's
+  single channel.
 
 Sony does not publish a supported macOS control API for these features. The
-headphone protocol is reverse engineered, so battery and noise controls should
-still be considered experimental. If the XM6 does not confirm a change, the app
-shows an error instead of pretending it succeeded.
+headphone protocol is reverse engineered, so battery, noise control, wear
+status, and equalizer support should still be considered experimental. If the
+XM6 does not confirm a change, the app shows an error instead of pretending it
+succeeded.
 
 ## Security and privacy
 
